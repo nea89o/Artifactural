@@ -19,8 +19,11 @@
 
 package net.minecraftforge.artifactural.gradle;
 
+import net.minecraftforge.fml.unsafe.UnsafeHacks;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.function.UnaryOperator;
 
 public class ReflectionUtils {
@@ -39,7 +42,11 @@ public class ReflectionUtils {
 
             T oldV = (T)f.get(target);
             T newV = operator.apply(oldV);
-            f.set(target, newV);
+            if (Modifier.isFinal(f.getModifiers())) {
+                UnsafeHacks.setField(f, target, newV);
+            } else {
+                f.set(target, newV);
+            }
 
             if (f.get(target) != newV) {
                 throw new IllegalStateException("Failed to set new value on " + f.getDeclaringClass().getName() + "." + f.getName());
@@ -68,9 +75,6 @@ public class ReflectionUtils {
             for (Field f : clazz.getDeclaredFields()) {
                 if (f.getName().equals(name)) {
                     f.setAccessible(true);
-                    if (!ModifierAccess.definalize(f)) {
-                        System.out.println("Could not definalize field " + f.getDeclaringClass().getName() + "." + f.getName() + " Exception ate, lets see if it works");
-                    }
                     return f;
                 }
             }
