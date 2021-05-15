@@ -2,7 +2,7 @@ plugins {
   id 'java-library'
   id 'maven-publish'
   id 'eclipse'
-  id 'net.minecrell.licenser' version '0.3'
+  id 'org.cadixdev.licenser' version '0.6.0'
   id 'org.ajoberstar.grgit' version '4.1.0'
 }
 
@@ -29,8 +29,8 @@ configurations {
     sharedImplementation.extendsFrom apiImplementation
     gradlecompImplementation.extendsFrom sharedImplementation
 
-    compile.extendsFrom sharedImplementation
-    compile.extendsFrom gradlecompImplementation
+    implementation.extendsFrom sharedImplementation
+    implementation.extendsFrom gradlecompImplementation
 }
 
 dependencies {
@@ -41,9 +41,9 @@ dependencies {
     gradlecompImplementation 'com.google.guava:guava:30.1-jre'
     gradlecompImplementation 'net.minecraftforge:unsafe:0.2.0'
 
-    compile sourceSets.api.output
-    compile sourceSets.shared.output
-    compile sourceSets.gradlecomp.output
+    implementation sourceSets.api.output
+    implementation sourceSets.shared.output
+    implementation sourceSets.gradlecomp.output
 }
 
 
@@ -51,57 +51,54 @@ tasks.withType(JavaCompile) {
     options.encoding = 'utf-8'
     options.deprecation = true
 }
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(8)
+    withSourcesJar()
 }
 
 jar {
     from sourceSets.api.output
     from sourceSets.shared.output
-    from(sourceSets.gradlecomp.output)
+    from sourceSets.gradlecomp.output
 }
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
+sourcesJar {
     from sourceSets.api.allSource
     from sourceSets.shared.allSource
     from sourceSets.gradlecomp.allSource
 }
-
 
 license {
     header = file("$rootDir/LICENSE-header.txt")
 }
 
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifact tasks.sourcesJar
-            pom {
-                groupId = project.group
-                version = project.version
-                artifactId = project.archivesBaseName
-                name = project.archivesBaseName
-                packaging = 'jar'
-                description = 'A Gradle artifact processing and management tool'
-                url = 'https://github.com/MinecraftForge/Artifactural/'
+    publications.create("mavenJava", MavenPublication) {
+        from components.java
+        pom {
+            groupId = project.group
+            version = project.version
+            artifactId = project.archivesBaseName
+            name = project.archivesBaseName
+            packaging = 'jar'
+            description = 'A Gradle artifact processing and management tool'
+            url = 'https://github.com/MinecraftForge/Artifactural/'
 
-                scm {
-                    url = 'https://github.com/MinecraftForge/Artifactural/'
-                    connection = 'scm:git:git://github.com/MinecraftForge/Artifactural.git'
-                    developerConnection = 'scm:git:git@github.com:MinecraftForge/Artifactural.git'
-                }
-                issueManagement {
-                    system = 'github'
-                    url = 'https://github.com/MinecraftForge/Artifactural/issues'
-                }
-                licenses {
-                    license {
-                        name = 'LGPL-2.1'
-                        url = 'https://www.gnu.org/licenses/lgpl-2.1.txt'
-                        distribution = 'repo'
-                    }
+            scm {
+                url = 'https://github.com/MinecraftForge/Artifactural/'
+                connection = 'scm:git:git://github.com/MinecraftForge/Artifactural.git'
+                developerConnection = 'scm:git:git@github.com:MinecraftForge/Artifactural.git'
+            }
+            issueManagement {
+                system = 'github'
+                url = 'https://github.com/MinecraftForge/Artifactural/issues'
+            }
+            licenses {
+                license {
+                    name = 'LGPL-2.1'
+                    url = 'https://www.gnu.org/licenses/lgpl-2.1.txt'
+                    distribution = 'repo'
                 }
             }
         }
