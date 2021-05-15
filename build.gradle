@@ -15,7 +15,6 @@ sourceSets {
     api
     shared
     gradlecomp
-    java9
 }
 
 repositories {
@@ -35,8 +34,6 @@ configurations {
 }
 
 dependencies {
-    java9Implementation files(sourceSets.main.output.classesDirs) { builtBy compileJava }
-    
     sharedImplementation sourceSets.api.output
 
     gradlecompImplementation sourceSets.shared.output
@@ -58,50 +55,10 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(8)
 }
 
-project(':artifactural9') {
-    apply plugin: 'java'
-    apply plugin: 'eclipse'
-    group = rootProject.group
-    java.toolchain.languageVersion = JavaLanguageVersion.of(9)
-
-    sourceSets {
-        java9.java.srcDirs = [rootProject.file('src/java9').getAbsolutePath()]
-    }
-    
-    eclipse {
-        project {
-            name rootProject.name + '9'
-            linkedResource name: 'java9', type: '2', location: rootProject.file('src/java9').getAbsolutePath()
-        }
-        jdt {
-            sourceCompatibility = targetCompatibility = 9
-        }
-    }
-    
-    tasks.withType(JavaCompile) {
-        options.encoding = 'utf-8'
-        javaCompiler = javaToolchains.compilerFor {
-            languageVersion = JavaLanguageVersion.of(9)
-        }
-    }
-}
-
-
-
 jar {
     from sourceSets.api.output
     from sourceSets.shared.output
     from(sourceSets.gradlecomp.output)
-
-    into('META-INF/versions/9') {
-        from project(':artifactural9').sourceSets.java9.output
-    }
-    
-    manifest {
-        attributes(
-            'Multi-Release': 'true'
-        )
-    }
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
