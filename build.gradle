@@ -11,7 +11,7 @@ plugins {
   id 'java-library'
   id 'maven-publish'
   id 'eclipse'
-  id 'net.minecrell.licenser' version '0.3'
+  id 'org.cadixdev.licenser' version '0.6.0'
 }
 
 group = 'net.minecraftforge'
@@ -23,34 +23,35 @@ sourceSets {
     api
     shared
     gradlecomp
-    java9
 }
 
 repositories {
     jcenter()
     mavenCentral()
+    maven {
+        url = 'https://maven.minecraftforge.net'
+    }
 }
 
 configurations {
     sharedImplementation.extendsFrom apiImplementation
     gradlecompImplementation.extendsFrom sharedImplementation
 
-    compile.extendsFrom sharedImplementation
-    compile.extendsFrom gradlecompImplementation
+    implementation.extendsFrom sharedImplementation
+    implementation.extendsFrom gradlecompImplementation
 }
 
 dependencies {
-    java9Implementation files(sourceSets.main.output.classesDirs) { builtBy compileJava }
-    
     sharedImplementation sourceSets.api.output
 
     gradlecompImplementation sourceSets.shared.output
     gradlecompImplementation gradleApi()
     gradlecompImplementation 'com.google.guava:guava:30.1-jre'
+    gradlecompImplementation 'net.minecraftforge:unsafe:0.2.0'
 
-    compile sourceSets.api.output
-    compile sourceSets.shared.output
-    compile sourceSets.gradlecomp.output
+    implementation sourceSets.api.output
+    implementation sourceSets.shared.output
+    implementation sourceSets.gradlecomp.output
 }
 
 
@@ -58,109 +59,69 @@ tasks.withType(JavaCompile) {
     options.encoding = 'utf-8'
     options.deprecation = true
 }
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(8)
+    withSourcesJar()
 }
-
-project(':artifactural9') {
-    apply plugin: 'java'
-    apply plugin: 'eclipse'
-    group = rootProject.group
-    java.toolchain.languageVersion = JavaLanguageVersion.of(9)
-
-    sourceSets {
-        java9.java.srcDirs = [rootProject.file('src/java9').getAbsolutePath()]
-    }
-    
-    eclipse {
-        project {
-            name rootProject.name + '9'
-            linkedResource name: 'java9', type: '2', location: rootProject.file('src/java9').getAbsolutePath()
-        }
-        jdt {
-            sourceCompatibility = targetCompatibility = 9
-        }
-    }
-    
-    tasks.withType(JavaCompile) {
-        options.encoding = 'utf-8'
-        javaCompiler = javaToolchains.compilerFor {
-            languageVersion = JavaLanguageVersion.of(9)
-        }
-    }
-}
-
-
 
 jar {
     from sourceSets.api.output
     from sourceSets.shared.output
-    from(sourceSets.gradlecomp.output)
-
-    into('META-INF/versions/9') {
-        from project(':artifactural9').sourceSets.java9.output
-    }
-    
-    manifest {
-        attributes(
-            'Multi-Release': 'true'
-        )
-    }
+    from sourceSets.gradlecomp.output
 }
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
+sourcesJar {
     from sourceSets.api.allSource
     from sourceSets.shared.allSource
     from sourceSets.gradlecomp.allSource
 }
-
 
 license {
     header = file("$rootDir/LICENSE-header.txt")
 }
 
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifact tasks.sourcesJar
-            pom {
-                groupId = project.group
-                version = project.version
-                artifactId = project.archivesBaseName
-                name = project.archivesBaseName
-                packaging = 'jar'
-                description = 'A Gradle artifact processing and management tool'
-                url = 'https://github.com/MinecraftForge/Artifactural/'
+    publications.create("mavenJava", MavenPublication) {
+        from components.java
+        pom {
+            groupId = project.group
+            version = project.version
+            artifactId = project.archivesBaseName
+            name = project.archivesBaseName
+            packaging = 'jar'
+            description = 'A Gradle artifact processing and management tool'
+            url = 'https://github.com/MinecraftForge/Artifactural/'
 
-                scm {
-                    url = 'https://github.com/MinecraftForge/Artifactural/'
-                    connection = 'scm:git:git://github.com/MinecraftForge/Artifactural.git'
-                    developerConnection = 'scm:git:git@github.com:MinecraftForge/Artifactural.git'
-                }
-                issueManagement {
-                    system = 'github'
-                    url = 'https://github.com/MinecraftForge/Artifactural/issues'
-                }
-                licenses {
-                    license {
-                        name = 'LGPL-2.1'
-                        url = 'https://www.gnu.org/licenses/lgpl-2.1.txt'
-                        distribution = 'repo'
-                    }
+            scm {
+                url = 'https://github.com/MinecraftForge/Artifactural/'
+                connection = 'scm:git:git://github.com/MinecraftForge/Artifactural.git'
+                developerConnection = 'scm:git:git@github.com:MinecraftForge/Artifactural.git'
+            }
+            issueManagement {
+                system = 'github'
+                url = 'https://github.com/MinecraftForge/Artifactural/issues'
+            }
+            licenses {
+                license {
+                    name = 'LGPL-2.1'
+                    url = 'https://www.gnu.org/licenses/lgpl-2.1.txt'
+                    distribution = 'repo'
                 }
             }
         }
     }
     repositories {
         maven {
-            if (project.hasProperty('mavenPassword')) {
-                credentials {
-                    username = project.properties.mavenUser
-                    password = project.properties.mavenPassword
+            if (System.env.MAVEN_USER) {
+                url 'https://maven.minecraftforge.net/'
+                authentication {
+                    basic(BasicAuthentication)
                 }
-                url 'https://files.minecraftforge.net/maven/manage/upload'
+                credentials {
+                    username = System.env.MAVEN_USER ?: 'not'
+                    password = System.env.MAVEN_PASSWORD ?: 'set'
+                }
             } else {
                 url 'file://' + rootProject.file('repo').getAbsolutePath()
             }
