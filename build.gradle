@@ -1,15 +1,15 @@
 import net.minecraftforge.artifactural.buildscript.JarTransformationTask
+import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.MethodInsnNode
-import org.objectweb.asm.Label
 
 plugins {
-  id 'java-library'
-  id 'maven-publish'
-  id 'eclipse'
-  id 'org.cadixdev.licenser' version '0.6.1'
-  id 'net.minecraftforge.gradleutils' version '2.+'
+    id 'java-library'
+    id 'maven-publish'
+    id 'eclipse'
+    id 'org.cadixdev.licenser' version '0.6.1'
+    id 'net.minecraftforge.gradleutils' version '2.+'
 }
 
 group = 'net.minecraftforge'
@@ -62,7 +62,7 @@ java {
     withSourcesJar()
 }
 
-tasks.register('transformJar', JarTransformationTask).configure {
+tasks.register('transformJar', JarTransformationTask) {
     addTransformer('net/minecraftforge/artifactural/gradle/GradleRepositoryAdapter') {
         it.methods.find {
             it.name == '<init>' && it.desc == '(Lnet/minecraftforge/artifactural/api/repository/Repository;Lorg/gradle/api/internal/artifacts/repositories/DefaultMavenLocalArtifactRepository;)V'
@@ -77,8 +77,9 @@ tasks.register('transformJar', JarTransformationTask).configure {
     }
 
     addTransformer('net/minecraftforge/artifactural/gradle/GradleRepositoryAdapter$1$1') { clazz ->
+        // Gradle [6.1,7.6)
         {
-            final method = clazz.visitMethod(Opcodes.ACC_PUBLIC, 'resolveArtifact', '(Lorg/gradle/internal/component/model/ComponentArtifactMetadata;Lorg/gradle/internal/component/model/ModuleSources;Lorg/gradle/internal/resolve/result/BuildableArtifactResolveResult;)V', null, new String[] {})
+            final method = clazz.visitMethod(Opcodes.ACC_PUBLIC, 'resolveArtifact', '(Lorg/gradle/internal/component/model/ComponentArtifactMetadata;Lorg/gradle/internal/component/model/ModuleSources;Lorg/gradle/internal/resolve/result/BuildableArtifactResolveResult;)V', null, new String[]{})
             final l0 = new Label()
             method.visitLabel(l0)
 
@@ -94,14 +95,15 @@ tasks.register('transformJar', JarTransformationTask).configure {
             final l2 = new Label()
             method.visitLabel(l2)
             method.visitLocalVariable('this', 'Lnet/minecraftforge/artifactural/gradle/GradleRepositoryAdapter$1$1;', null, l0, l2, 0)
-            method.visitLocalVariable('componentArtifactMetadata', 'Lorg/gradle/internal/component/model/ComponentArtifactMetadata;', null, l0, l2, 1)
+            method.visitLocalVariable('artifact', 'Lorg/gradle/internal/component/model/ComponentArtifactMetadata;', null, l0, l2, 1)
             method.visitLocalVariable('moduleSources', 'Lorg/gradle/internal/component/model/ModuleSources;', null, l0, l2, 2)
-            method.visitLocalVariable('buildableArtifactFileResolveResult', 'Lorg/gradle/internal/resolve/result/BuildableArtifactResolveResult;', null, l0, l2, 3)
+            method.visitLocalVariable('result', 'Lorg/gradle/internal/resolve/result/BuildableArtifactResolveResult;', null, l0, l2, 3)
             method.visitEnd()
         }
 
+        // Gradle [6.0,7.6)
         {
-            final method = clazz.visitMethod(Opcodes.ACC_PUBLIC, 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentArtifactMetadata;Lorg/gradle/internal/component/model/ConfigurationMetadata;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', null, new String[] {})
+            final method = clazz.visitMethod(Opcodes.ACC_PUBLIC, 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentResolveMetadata;Lorg/gradle/internal/component/model/ConfigurationMetadata;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', null, new String[]{})
             final l0 = new Label()
             method.visitLabel(l0)
 
@@ -110,28 +112,53 @@ tasks.register('transformJar', JarTransformationTask).configure {
             method.visitVarInsn(Opcodes.ALOAD, 1)
             method.visitVarInsn(Opcodes.ALOAD, 2)
             method.visitVarInsn(Opcodes.ALOAD, 3)
-            method.visitMethodInsn(Opcodes.INVOKEINTERFACE, 'org/gradle/api/internal/artifacts/ivyservice/ivyresolve/ModuleComponentRepositoryAccess', 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentArtifactMetadata;Lorg/gradle/internal/component/model/ModuleSources;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', true)
+            method.visitMethodInsn(Opcodes.INVOKEINTERFACE, 'org/gradle/api/internal/artifacts/ivyservice/ivyresolve/ModuleComponentRepositoryAccess', 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentResolveMetadata;Lorg/gradle/internal/component/model/ConfigurationMetadata;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', true)
             final l1 = new Label()
             method.visitLabel(l1)
             method.visitInsn(Opcodes.RETURN)
             final l2 = new Label()
             method.visitLabel(l2)
             method.visitLocalVariable('this', 'Lnet/minecraftforge/artifactural/gradle/GradleRepositoryAdapter$1$1;', null, l0, l2, 0)
-            method.visitLocalVariable('componentArtifactMetadata', 'Lorg/gradle/internal/component/model/ComponentArtifactMetadata;', null, l0, l2, 1)
-            method.visitLocalVariable('metadata', 'Lorg/gradle/internal/component/model/ConfigurationMetadata;', null, l0, l2, 2)
-            method.visitLocalVariable('buildableArtifactFileResolveResult', 'Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;', null, l0, l2, 3)
+            method.visitLocalVariable('component', 'Lorg/gradle/internal/component/model/ComponentResolveMetadata;', null, l0, l2, 1)
+            method.visitLocalVariable('variant', 'Lorg/gradle/internal/component/model/ConfigurationMetadata;', null, l0, l2, 2)
+            method.visitLocalVariable('result', 'Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;', null, l0, l2, 3)
+            method.visitEnd()
+        }
+
+        // Gradle [3.1,6.0) U [7.5,7.6)
+        {
+            final method = clazz.visitMethod(Opcodes.ACC_PUBLIC, 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentResolveMetadata;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', null, new String[]{})
+            final l0 = new Label()
+            method.visitLabel(l0)
+
+            method.visitVarInsn(Opcodes.ALOAD, 0)
+            method.visitFieldInsn(Opcodes.GETFIELD, 'net/minecraftforge/artifactural/gradle/GradleRepositoryAdapter$1$1', 'val$delegate', 'Lorg/gradle/api/internal/artifacts/ivyservice/ivyresolve/ModuleComponentRepositoryAccess;')
+            method.visitVarInsn(Opcodes.ALOAD, 1)
+            method.visitVarInsn(Opcodes.ALOAD, 2)
+            method.visitMethodInsn(Opcodes.INVOKEINTERFACE, 'org/gradle/api/internal/artifacts/ivyservice/ivyresolve/ModuleComponentRepositoryAccess', 'resolveArtifacts', '(Lorg/gradle/internal/component/model/ComponentResolveMetadata;Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;)V', true)
+            final l1 = new Label()
+            method.visitLabel(l1)
+            method.visitInsn(Opcodes.RETURN)
+            final l2 = new Label()
+            method.visitLabel(l2)
+            method.visitLocalVariable('this', 'Lnet/minecraftforge/artifactural/gradle/GradleRepositoryAdapter$1$1;', null, l0, l2, 0)
+            method.visitLocalVariable('component', 'Lorg/gradle/internal/component/model/ComponentResolveMetadata;', null, l0, l2, 1)
+            method.visitLocalVariable('result', 'Lorg/gradle/internal/resolve/result/BuildableComponentArtifactsResolveResult;', null, l0, l2, 3)
             method.visitEnd()
         }
     }
 
-    file.set(tasks.jar.archiveFile)
+    inputFile = tasks.named('jar').flatMap { it.archiveFile }
+    outputFile = project.layout.buildDirectory.dir('libs').flatMap { dir ->
+        tasks.named('jar').flatMap { it.archiveFileName }.map { String name -> dir.file(name.substring(0, name.length() - 4) + '-transformed.jar') }
+    }
 }
 
 jar {
     from sourceSets.api.output
     from sourceSets.shared.output
     from sourceSets.gradlecomp.output
-	finalizedBy('transformJar')
+    finalizedBy 'transformJar'
 }
 
 sourcesJar {
@@ -144,9 +171,16 @@ license {
     header = file("$rootDir/LICENSE-header.txt")
 }
 
+artifacts {
+    archives tasks.named('transformJar').flatMap { it.outputFile }
+}
+
 publishing {
     publications.create("mavenJava", MavenPublication) {
-        from components.java
+        artifact sourcesJar
+        artifact(tasks.named('transformJar').flatMap { it.outputFile }) {
+            classifier = null
+        }
         pom {
             groupId = project.group
             version = project.version

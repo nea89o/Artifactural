@@ -25,8 +25,9 @@ import groovy.transform.stc.SimpleType
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
-import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
@@ -40,12 +41,16 @@ import java.util.zip.ZipOutputStream
 @CompileStatic
 abstract class JarTransformationTask extends DefaultTask {
     @InputFile
-    abstract RegularFileProperty getFile()
-    @Input
+    abstract RegularFileProperty getInputFile()
+    @OutputFile
+    abstract RegularFileProperty getOutputFile()
+    @Internal
     abstract MapProperty<String, ClassTransformer> getTransformers()
 
     JarTransformationTask() {
         transformers.convention([:])
+        // Class transformers can change and are not serializable, so we always have to run this
+        outputs.upToDateWhen { false }
     }
 
     void addTransformer(String className, @ClosureParams(value = SimpleType, options = 'org.objectweb.asm.tree.ClassNode') Closure transformer) {
@@ -56,7 +61,7 @@ abstract class JarTransformationTask extends DefaultTask {
     void run() {
         final bos = new ByteArrayOutputStream()
         final zipOut = new ZipOutputStream(bos)
-        try (final zipIn = new ZipInputStream(file.get().asFile.newInputStream())) {
+        try (final zipIn = new ZipInputStream(inputFile.get().asFile.newInputStream())) {
             ZipEntry entry
             while ((entry = zipIn.nextEntry) !== null) {
                 if (entry.name.endsWith('.class')) {
@@ -83,7 +88,7 @@ abstract class JarTransformationTask extends DefaultTask {
         }
         zipOut.close()
 
-        Files.write(file.asFile.get().toPath(), bos.toByteArray())
+        Files.write(outputFile.asFile.get().toPath(), bos.toByteArray())
     }
 
     private static ZipEntry copy(ZipEntry entry) {
