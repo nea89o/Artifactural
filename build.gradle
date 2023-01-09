@@ -212,3 +212,9 @@ publishing {
         maven gradleutils.getPublishingForgeMaven()
     }
 }
+
+changelog {
+    fromTag('3.0')
+}
+
+
