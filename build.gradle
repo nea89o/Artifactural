@@ -214,7 +214,7 @@ publishing {
 }
 
 changelog {
-    fromCommit('eb824ff275544533d38fa184dfb0adef360a62b0') //There is no tag yet so the versions might be messed up.
+    fromTag('3.0')
 }
 
 
