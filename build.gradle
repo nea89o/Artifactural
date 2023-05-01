@@ -1,4 +1,5 @@
 import net.minecraftforge.artifactural.buildscript.JarTransformationTask
+import net.minecraftforge.artifactural.buildscript.SoftwareComponentFactoryGrabber
 import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.InsnNode
@@ -171,16 +172,25 @@ license {
     header = file("$rootDir/LICENSE-header.txt")
 }
 
-artifacts {
-    archives tasks.named('transformJar').flatMap { it.outputFile }
+configurations.runtimeElements.outgoing {
+    it.artifacts.removeIf {
+        (it.classifier == null || it.classifier.blank) && it.extension == 'jar' // Remove the jar artifact as we want to replace it with the transformed one
+    }
+    it.artifact(tasks.named('transformJar').flatMap { it.outputFile }) {
+        classifier = null
+    }
+}
+
+final transformed = project.objects.newInstance(SoftwareComponentFactoryGrabber).softwareComponentFactory.adhoc('transformed')
+project.components.add(transformed)
+transformed.addVariantsFromConfiguration(configurations.runtimeElements) {
+    mapToMavenScope 'runtime'
 }
 
 publishing {
     publications.create("mavenJava", MavenPublication) {
+        from components.transformed
         artifact sourcesJar
-        artifact(tasks.named('transformJar').flatMap { it.outputFile }) {
-            classifier = null
-        }
         pom {
             groupId = project.group
             version = project.version
