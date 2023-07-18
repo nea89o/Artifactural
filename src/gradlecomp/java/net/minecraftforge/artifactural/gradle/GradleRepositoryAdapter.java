@@ -19,13 +19,13 @@
 
 package net.minecraftforge.artifactural.gradle;
 
+import com.google.common.collect.ImmutableList;
 import net.minecraftforge.artifactural.api.artifact.Artifact;
 import net.minecraftforge.artifactural.api.artifact.ArtifactIdentifier;
 import net.minecraftforge.artifactural.api.artifact.MissingArtifactException;
 import net.minecraftforge.artifactural.api.repository.Repository;
 import net.minecraftforge.artifactural.base.artifact.SimpleArtifactIdentifier;
 import net.minecraftforge.artifactural.base.cache.LocatedArtifactCache;
-
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails;
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
@@ -40,6 +40,7 @@ import org.gradle.api.internal.artifacts.repositories.AbstractArtifactRepository
 import org.gradle.api.internal.artifacts.repositories.DefaultMavenLocalArtifactRepository;
 import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository;
 import org.gradle.api.internal.artifacts.repositories.descriptor.FlatDirRepositoryDescriptor;
+import org.gradle.api.internal.artifacts.repositories.descriptor.IvyRepositoryDescriptor;
 import org.gradle.api.internal.artifacts.repositories.descriptor.RepositoryDescriptor;
 import org.gradle.api.internal.artifacts.repositories.resolver.ExternalResourceArtifactResolver;
 import org.gradle.api.internal.artifacts.repositories.resolver.ExternalResourceResolver;
@@ -84,11 +85,11 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
 
     private static final Pattern URL_PATTERN = Pattern.compile(
             "^(?<group>\\S+(?:/\\S+)*)/(?<name>\\S+)/(?<version>\\S+)/" +
-                    "\\2-\\3(?:-(?<classifier>[^.\\s]+))?\\.(?<extension>\\S+)$");
+            "\\2-\\3(?:-(?<classifier>[^.\\s]+))?\\.(?<extension>\\S+)$");
 
     public static GradleRepositoryAdapter add(RepositoryHandler handler, String name, File local, Repository repository) {
         BaseRepositoryFactory factory = ReflectionUtils.get(handler, "repositoryFactory"); // We reflect here and create it manually so it DOESN'T get attached.
-        DefaultMavenLocalArtifactRepository maven = (DefaultMavenLocalArtifactRepository)factory.createMavenLocalRepository(); // We use maven local because it bypasses the caching and coping to .m2
+        DefaultMavenLocalArtifactRepository maven = (DefaultMavenLocalArtifactRepository) factory.createMavenLocalRepository(); // We use maven local because it bypasses the caching and coping to .m2
         maven.setUrl(local);
         maven.setName(name);
         maven.metadataSources(m -> {
@@ -154,9 +155,9 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
 
     @Override
     public ConfiguredModuleComponentRepository createResolver() {
-        MavenResolver resolver = (MavenResolver)local.createResolver();
+        MavenResolver resolver = (MavenResolver) local.createResolver();
 
-        GeneratingFileResourceRepository  repo = new GeneratingFileResourceRepository();
+        GeneratingFileResourceRepository repo = new GeneratingFileResourceRepository();
         ReflectionUtils.alter(resolver, "repository", prev -> repo);  // ExternalResourceResolver.repository
         //ReflectionUtils.alter(resolver, "metadataSources", ); //ExternalResourceResolver.metadataSources We need to fix these from returning 'missing'
         // MavenResolver -> MavenMetadataLoader -> FileCacheAwareExternalResourceAccessor -> DefaultCacheAwareExternalResourceAccessor
@@ -169,6 +170,7 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
         ReflectionUtils.alter(resolver, "cachingResourceAccessor.this$0.repository", prev -> repo);
         ReflectionUtils.alter(resolver, "cachingResourceAccessor.delegate.delegate", prev -> repo);
 
+        //noinspection unchecked,rawtypes
         return new ConfiguredModuleComponentRepository() {
             private final ModuleComponentRepositoryAccess local = wrap(resolver.getLocalAccess());
             private final ModuleComponentRepositoryAccess remote = wrap(resolver.getRemoteAccess());
@@ -182,26 +184,70 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
             @Override public boolean isLocal() { return resolver.isLocal(); }
 
             @Override
-            public void setComponentResolvers(ComponentResolvers resolver) { }
+            public void setComponentResolvers(ComponentResolvers resolver) {}
+
             @Override
             public Instantiator getComponentMetadataInstantiator() {
                 return resolver.getComponentMetadataInstantiator();
             }
 
             private ModuleComponentRepositoryAccess wrap(ModuleComponentRepositoryAccess delegate) {
+                //noinspection rawtypes
                 return new ModuleComponentRepositoryAccess() {
                     @Override
-                    public void resolveComponentMetaData(ModuleComponentIdentifier moduleComponentIdentifier, ComponentOverrideMetadata requestMetaData, BuildableModuleComponentMetaDataResolveResult result) {
+                    public void resolveComponentMetaData(ModuleComponentIdentifier moduleComponentIdentifier, ComponentOverrideMetadata requestMetaData,
+                            BuildableModuleComponentMetaDataResolveResult result) {
+                        //noinspection unchecked
                         delegate.resolveComponentMetaData(moduleComponentIdentifier, requestMetaData, result);
                         if (result.getState() == BuildableModuleComponentMetaDataResolveResult.State.Resolved) {
-                            ModuleComponentResolveMetadata meta = result.getMetaData();
+                            ModuleComponentResolveMetadata meta = getMetadata(result);
                             if (meta.isMissing()) {
                                 MutableModuleComponentResolveMetadata mutable = meta.asMutable();
                                 mutable.setChanging(true);
                                 mutable.setMissing(false);
-                                result.resolved(mutable.asImmutable());
+                                setResultResolved(result, mutable.asImmutable());
                             }
                         }
+                    }
+
+                    private void setResultResolved(BuildableModuleComponentMetaDataResolveResult result, ModuleComponentResolveMetadata meta) {
+                        if (GradleVersion.current().compareTo(GradleVersion.version("8.2")) >= 0) {
+                            this.setResultResolvedGradle8_2Above(result, meta);
+                        } else {
+                            this.setResultResolvedGradle8_1Below(result, meta);
+                        }
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    private void setResultResolvedGradle8_2Above(BuildableModuleComponentMetaDataResolveResult result, ModuleComponentResolveMetadata meta) {
+                        result.resolved(meta);
+                    }
+
+                    // DO NOT TOUCH
+                    // This method is modified by ASM in build.gradle
+                    @SuppressWarnings("unchecked")
+                    private void setResultResolvedGradle8_1Below(BuildableModuleComponentMetaDataResolveResult result, ModuleComponentResolveMetadata meta) {
+                        // Descriptor of resolved is changed to (Lorg/gradle/internal/component/external/model/ModuleComponentResolveMetadata;)V
+                        result.resolved(meta);
+                    }
+
+                    private ModuleComponentResolveMetadata getMetadata(BuildableModuleComponentMetaDataResolveResult result) {
+                        return GradleVersion.current().compareTo(GradleVersion.version("8.2")) >= 0
+                                ? this.getMetadataGradle8_2Above(result)
+                                : this.getMetadataGradle8_1Below(result);
+                    }
+
+                    private ModuleComponentResolveMetadata getMetadataGradle8_2Above(BuildableModuleComponentMetaDataResolveResult result) {
+                        // This cast is actually safe, because we know the typing of the generics is <ModuleComponentResolveMetadata>
+                        // We explicitly don't use the generics because they don't exist on Gradle versions 8.1.* and lower
+                        return (ModuleComponentResolveMetadata) result.getMetaData();
+                    }
+
+                    // DO NOT TOUCH
+                    // This method is modified by ASM in build.gradle
+                    private ModuleComponentResolveMetadata getMetadataGradle8_1Below(BuildableModuleComponentMetaDataResolveResult result) {
+                        // Descriptor of getMetaData is changed to ()Lorg/gradle/internal/component/external/model/ModuleComponentResolveMetadata;
+                        return (ModuleComponentResolveMetadata) result.getMetaData();
                     }
 
                     @Override
@@ -215,7 +261,8 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
                     }
 
                     @Override
-                    public void resolveArtifact(ComponentArtifactMetadata componentArtifactMetadata, ModuleSources moduleSources, BuildableArtifactFileResolveResult buildableArtifactFileResolveResult) {
+                    public void resolveArtifact(ComponentArtifactMetadata componentArtifactMetadata, ModuleSources moduleSources,
+                            BuildableArtifactFileResolveResult buildableArtifactFileResolveResult) {
                         delegate.resolveArtifact(componentArtifactMetadata, moduleSources, buildableArtifactFileResolveResult);
                     }
 
@@ -229,21 +276,44 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
     }
 
     public RepositoryDescriptor getDescriptor() {
-        return new FlatDirRepositoryDescriptor("ArtifacturalRepository", new ArrayList<>());
+        return GradleVersion.current().compareTo(GradleVersion.version("8.2")) >= 0
+                ? this.getDescriptorGradle8_2Above()
+                : this.getDescriptorGradle8_1Below();
     }
 
+    // DO NOT TOUCH
+    // This method is used on Gradle 8.1.* and below
+    // It is modified by ASM in build.gradle
+    private RepositoryDescriptor getDescriptorGradle8_1Below() {
+        // Replaced by FlatDirRepositoryDescriptor(String, List) with ASM
+        return new FlatDirRepositoryDescriptor("ArtifacturalRepository", new ArrayList<>(), null);
+    }
+
+    private RepositoryDescriptor getDescriptorGradle8_2Above() {
+        IvyRepositoryDescriptor.Builder builder = new IvyRepositoryDescriptor.Builder("ArtifacturalRepository", null);
+        builder.setM2Compatible(false);
+        builder.setLayoutType("Unknown");
+        builder.setMetadataSources(ImmutableList.of());
+        builder.setAuthenticated(false);
+        builder.setAuthenticationSchemes(ImmutableList.of());
+        IvyRepositoryDescriptor ivyDescriptor = builder.create();
+        return new FlatDirRepositoryDescriptor("ArtifacturalRepository", new ArrayList<>(), ivyDescriptor);
+    }
 
     private static String cleanRoot(URI uri) {
         String ret = uri.normalize().getPath().replace('\\', '/');
-        if (!ret.endsWith("/")) ret += '/';
+        if (!ret.endsWith("/"))
+            ret += '/';
         return ret;
     }
 
     private class GeneratingFileResourceRepository implements FileResourceRepository {
         private final FileSystem fileSystem = FileSystems.getDefault();
+
         private void debug(String message) {
             //System.out.println(message);
         }
+
         private void log(String message) {
             System.out.println(message);
         }
@@ -289,11 +359,11 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
                 Matcher matcher = URL_PATTERN.matcher(relative);
                 if (matcher.matches()) {
                     ArtifactIdentifier identifier = new SimpleArtifactIdentifier(
-                        matcher.group("group").replace('/', '.'),
-                        matcher.group("name"),
-                        matcher.group("version"),
-                        matcher.group("classifier"),
-                        matcher.group("extension"));
+                            matcher.group("group").replace('/', '.'),
+                            matcher.group("name"),
+                            matcher.group("version"),
+                            matcher.group("classifier"),
+                            matcher.group("extension"));
                     Artifact artifact = repository.getArtifact(identifier);
                     return wrap(artifact, identifier);
                 } else if (relative.endsWith("maven-metadata.xml")) {
