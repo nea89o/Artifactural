@@ -145,6 +145,9 @@ public class GradleRepositoryAdapter extends AbstractArtifactRepository implemen
     }
 
     private static VersionParser getVersionParser(DefaultMavenLocalArtifactRepository maven) {
+		if (GradleVersion.current().compareTo(GradleVersion.version("8.7")) >= 0) {
+			return ReflectionUtils.get(ReflectionUtils.get(maven, "repositoryContentDescriptor"), "versionParser");
+		}
         return ReflectionUtils.get(maven, "versionParser");
     }
 
